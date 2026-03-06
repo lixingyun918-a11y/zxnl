@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 【修复点 1：首屏文本延迟】 
+         将 <title> 标签置于 <head> 的绝对第一顺位，确保浏览器解析到第一个字节时即刻获取标题文本。 -->
+    <title>国家职业资格证书管理系统</title>
+    
+    <meta name="color-scheme" content="light">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#ffffff" id="theme-meta">
+
+    <style>
+        :root { color-scheme: light; }
+
+        body > *:not(.page):not(#msg-box):not(script) {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            position: absolute !important;
+            z-index: -9999 !important;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            position: fixed; 
+            overflow: hidden; 
+            touch-action: none;
+            overscroll-behavior: none; 
+            background-color: #ffffff !important; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
+        .page {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: none;
+            z-index: 10;
+            background-color: inherit;
+        }
+
+        .page.active { display: block; }
+
+        /* ================= 验证码页内容区 ================= */
+        .verify-wrap {
+            position: absolute;
+            top: 0; 
+            left: 0; right: 0;
+            height: 50vh; 
+            height: 50lvh; 
+            min-height: 200px;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding-top: env(safe-area-inset-top, 0px); 
+            padding-left: env(safe-area-inset-left, 0px);
+            padding-right: env(safe-area-inset-right, 0px);
+        }
+
+        .h1-title {
+            font-size: 22px;
+            color: #333;
+            margin-bottom: 25px; 
+            cursor: pointer;
+            display: block;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .captcha-area {
+            width: 248px;
+            height: 40px; 
+            display: flex;
+            justify-content: space-between;
+            gap: 4px;
+            margin-bottom: 25px; 
+        }
+
+        .input-box {
+            width: 150px;
+            height: 100%; 
+            border: 2px solid #d4af37 !important;
+            border-radius: 6px;
+            padding: 0 10px;
+            font-size: 16px; 
+            outline: none !important;
+            box-shadow: none !important;
+            caret-color: #d4af37;
+            background-color: #ffffff;
+            -webkit-user-select: text;
+            user-select: text;
+            -webkit-text-fill-color: #333; 
+            -webkit-appearance: none;
+            appearance: none;
+            -webkit-box-shadow: 0 0 0px 1000px white inset !important;
+            touch-action: manipulation;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+        
+        .input-box:disabled {
+            opacity: 1;
+            background-color: #ffffff;
+            -webkit-text-fill-color: #333;
+        }
+
+        .captcha-img-box {
+            width: 94px;
+            height: 100%;
+            border: 1px solid #0000cd;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: "Comic Sans MS", "Chalkboard SE", "Marker Felt", cursive;
+            color: #0000cd;
+        }
+        .hand-char { display: inline-block; font-weight: bold; pointer-events: none; }
+
+        .btn-confirm {
+            width: 248px;
+            height: 40px;
+            background-color: #557bf8;
+            border: none;
+            border-radius: 20px;
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        
+        @media (hover: hover) and (pointer: fine) {
+            .btn-confirm:hover { background-color: #4a6ee0; }
+        }
+        .btn-confirm:active { background-color: #3a5ed0; }
+        .btn-confirm:disabled { 
+            opacity: 0.9; 
+            color: #ffffff;
+            -webkit-text-fill-color: #ffffff;
+        }
+
+        /* ================= 证书展示区 (绝对冻结区) ================= */
+        .cert-wrap {
+            position: absolute;
+            top: 0; 
+            bottom: 0; left: 0; right: 0;
+            background-color: #e0edf8; 
+        }
+
+        .img-container {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50%;
+            height: 40%; 
+            top: 3px; 
+            
+            background-color: transparent;
+            border: none;
+            box-shadow: none;
+            
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            pointer-events: none; 
+        }
+
+        #cert-img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            
+            background-color: #ffffff;
+            border: 1px solid #dcdcdc;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            
+            display: block;
+            pointer-events: auto; 
+            user-drag: none;
+            -webkit-user-drag: none;
+
+            transform: translateZ(0);
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+        }
+
+        #msg-box {
+            position: fixed;
+            inset: 0;
+            margin: auto;
+            width: max-content;
+            height: max-content;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 14px 24px;
+            border-radius: 8px;
+            display: none;
+            z-index: 999999; 
+            font-size: 16px;
+            white-space: nowrap;
+            pointer-events: none; 
+            will-change: opacity, transform;
+        }
+    </style>
+
+    <!-- 【修复点 2：优化图片加载瓶颈】
+         精妙的加载顺序调整：将预加载标签置于 <style> 之后！
+         确保浏览器在完整构建 CSSOM (渲染界面) 之后，再调动网络资源去下载图片。
+         这样既保证了图片以最高优先级 (fetchpriority="high") 被缓存，又绝不会阻塞首屏文字的瞬时渲染。 -->
+    <link rel="preload" href="certificate.jpg" as="image" fetchpriority="high">
+
+</head>
+<body>
+
+    <!-- 【修复点 1：首屏文本延迟】 
+         JS 强制唤醒机制。部分移动端内置浏览器（如微信、老旧安卓）会延迟加载顶部系统标题栏。
+         在 body 开启瞬间注入该脚本，可强迫原生 Webview 立即刷新标题文字，彻底消灭迟滞感。 -->
+    <script>document.title = "国家职业资格证书管理系统";</script>
+
+    <div id="msg-box" role="alert" aria-live="assertive"></div>
+
+    <div id="page-verify" class="page active">
+        <div class="verify-wrap">
+            
+            <form id="verify-form" action="javascript:void(0);" autocomplete="off" novalidate style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+                
+                <label for="captcha-input" class="h1-title">请输入验证码</label>
+                
+                <div class="captcha-area">
+                    <input type="text" id="captcha-input" name="captcha_code" data-form-type="other" class="input-box" placeholder="验证码" autocomplete="one-time-code" enterkeyhint="go" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="text" pattern="[A-Za-z0-9]*" style="ime-mode:disabled;" aria-label="请输入验证码">
+                    
+                    <div class="captcha-img-box" aria-hidden="true" role="presentation">
+                        <span class="hand-char" style="transform: rotate(-15deg) translateY(2px); font-size: 20px;">e</span>
+                        <span class="hand-char" style="transform: rotate(10deg) translateY(-1px); font-size: 17px; font-weight: normal;">e</span>
+                        <span class="hand-char" style="transform: rotate(-8deg) translateY(3px); font-size: 22px;">q</span>
+                        <span class="hand-char" style="transform: rotate(18deg) translateY(-2px); font-size: 19px; font-weight: normal;">c</span>
+                    </div>
+                </div>
+                <button type="submit" id="btn-submit" class="btn-confirm">确认</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 【保护区】：绝对冻结 -->
+    <div id="page-result" class="page">
+        <div class="cert-wrap">
+            <div class="img-container">
+                <img id="cert-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="证书" draggable="false" oncontextmenu="return false;">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if (!window.__APP_INIT__) {
+            window.__APP_INIT__ = true;
+
+            document.addEventListener('DOMContentLoaded', function() {
+                
+                const imagesToTry = Object.freeze([
+                    'certificate.jpg', 
+                    'Certificate.jpg', 
+                    'certificate.jpeg',
+                    'cert_image.jpg', 
+                    'certificate.png',
+                    'certificate.PNG',
+                    'certificate.webp'
+                ]);
+                
+                // 【修复点 2：优化图片加载瓶颈】
+                // 废除以往导致卡顿的人工延迟 (setTimeout) 机制。
+                // 在 DOM 树构建完毕后，立即利用底层的 Image 对象发起异步静默下载。
+                // 增加 decoding="async" 确保大图解码过程绝不阻塞主线程。多端兼容性达到最佳。
+                var silentPreloader = new Image();
+                silentPreloader.decoding = "async";
+                silentPreloader.src = imagesToTry[0];
+                
+                const BLANK_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                
+                const themeMeta = document.getElementById('theme-meta');
+                const btnSubmit = document.getElementById('btn-submit');
+                const input = document.getElementById('captcha-input');
+                const pageVerify = document.getElementById('page-verify');
+                const pageResult = document.getElementById('page-result');
+                const certImg = document.getElementById('cert-img');
+                const msgBox = document.getElementById('msg-box');
+                const verifyForm = document.getElementById('verify-form');
+
+                let isProcessing = false;
+
+                function safeGetHistoryState() {
+                    try { return history.state; } catch (e) { return null; }
+                }
+
+                function safePushState(pageId) {
+                    try {
+                        const hState = safeGetHistoryState();
+                        if (!hState || hState.page !== pageId) {
+                            history.pushState({ page: pageId }, "");
+                        }
+                    } catch (e) { }
+                }
+
+                try {
+                    history.replaceState({ page: 1 }, "");
+                } catch (e) { }
+
+                let timer = null;
+
+                function showMsg(txt) {
+                    msgBox.textContent = '';
+                    setTimeout(() => {
+                        msgBox.textContent = txt;
+                        msgBox.style.display = 'block';
+                        if (timer) clearTimeout(timer);
+                        timer = setTimeout(() => { msgBox.style.display = 'none'; }, 2000);
+                    }, 10);
+                }
+
+                function sanitizeInput(val) {
+                    let halfWidth = val.replace(/[\uff01-\uff5e\u3000]/g, function(ch) {
+                        if (ch === '\u3000') return ' ';
+                        return String.fromCharCode(ch.charCodeAt(0) - 0xfee0);
+                    });
+                    return halfWidth.replace(/[^a-zA-Z0-9]/g, '').replace(/[\x00-\x1F\x7F]/g, '').substring(0, 4).toLowerCase();
+                }
+
+                function safeUpdateInput(newVal) {
+                    input.value = newVal;
+                    try { input.setSelectionRange(newVal.length, newVal.length); } catch(e) {}
+                }
+
+                let isComposing = false;
+                input.addEventListener('compositionstart', () => { isComposing = true; });
+                input.addEventListener('compositionend', function() { 
+                    setTimeout(() => {
+                        isComposing = false;
+                        safeUpdateInput(sanitizeInput(this.value));
+                    }, 0);
+                });
+                input.addEventListener('input', function() {
+                    if (!isComposing) {
+                        safeUpdateInput(sanitizeInput(this.value));
+                    }
+                });
+
+                input.addEventListener('paste', function(e) {
+                    if (e && e.preventDefault) e.preventDefault();
+                    let pasteData = '';
+                    try {
+                        pasteData = (e.clipboardData || window.clipboardData).getData('text') || '';
+                    } catch (err) {}
+                    safeUpdateInput(sanitizeInput(pasteData));
+                });
+                input.addEventListener('drop', function(e) { if (e && e.preventDefault) e.preventDefault(); });
+                input.addEventListener('contextmenu', function(e) { if (e && e.preventDefault) e.preventDefault(); });
+
+                input.addEventListener('blur', function() {
+                    isComposing = false;
+                });
+
+                function loadWithFallback() {
+                    let fallbackIdx = 0;
+                    let loadWatchdog = null;
+
+                    const clearWatchdog = () => {
+                        if (loadWatchdog) clearTimeout(loadWatchdog);
+                    };
+
+                    const unlockUI = () => {
+                        isProcessing = false;
+                        input.disabled = false;
+                        btnSubmit.disabled = false;
+                        btnSubmit.removeAttribute('aria-disabled');
+                        document.body.style.pointerEvents = 'auto';
+                    };
+
+                    certImg.onerror = function() {
+                        clearWatchdog();
+                        fallbackIdx++;
+                        if (fallbackIdx < imagesToTry.length) {
+                            certImg.src = "";
+                            this.src = imagesToTry[fallbackIdx];
+                            startWatchdog();
+                        } else {
+                            certImg.src = "";
+                            this.src = BLANK_PIXEL;
+                            this.onerror = null;
+                            unlockUI();
+                        }
+                    };
+                    
+                    certImg.onload = function() {
+                        clearWatchdog();
+                        if ('decode' in certImg) {
+                            certImg.decode().then(unlockUI).catch(unlockUI);
+                        } else {
+                            unlockUI();
+                        }
+                    };
+                    
+                    function startWatchdog() {
+                        clearWatchdog();
+                        loadWatchdog = setTimeout(() => {
+                            if (certImg.onerror) certImg.onerror();
+                        }, 10000);
+                    }
+
+                    certImg.src = "";
+                    certImg.src = imagesToTry[0];
+                    startWatchdog();
+                }
+
+                function processVerification() {
+                    if (isProcessing) return;
+                    
+                    const val = input.value.trim().toLowerCase();
+                    
+                    if (val === '') {
+                        input.focus();
+                        showMsg('请输入验证码');
+                        return;
+                    }
+                    
+                    if (val === 'eeqc') {
+                        isProcessing = true;
+                        input.disabled = true;
+                        btnSubmit.disabled = true;
+                        btnSubmit.setAttribute('aria-disabled', 'true');
+                        document.body.style.pointerEvents = 'none';
+                        
+                        document.title = "证书信息"; 
+                        document.body.style.backgroundColor = '#e0edf8';
+                        themeMeta.content = '#e0edf8'; 
+                        
+                        input.blur(); 
+                        
+                        pageVerify.classList.remove('active');
+                        pageResult.classList.add('active');
+                        
+                        safePushState(2);
+                        loadWithFallback();
+                        
+                    } else {
+                        input.focus();
+                        setTimeout(() => { input.value = ''; }, 0);
+                        showMsg('验证码输入错误');
+                    }
+                }
+
+                verifyForm.addEventListener('submit', function(e) {
+                    if (e && e.preventDefault) e.preventDefault();
+                    if (document.activeElement === input) input.blur();
+                    processVerification();
+                });
+
+                window.addEventListener('orientationchange', function() {
+                    if (document.activeElement === input) input.blur();
+                });
+
+                input.onblur = () => {
+                    setTimeout(() => { 
+                        if (window.scrollY > 0) {
+                            window.scrollTo(0, 0); 
+                        }
+                    }, 10);
+                };
+
+                let debounceTimer = null;
+                window.addEventListener('popstate', function(event) {
+                    if (debounceTimer) clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        const hState = safeGetHistoryState();
+                        if (!hState || hState.page === 1) {
+                            document.title = "国家职业资格证书管理系统";
+                            document.body.style.backgroundColor = '#ffffff';
+                            themeMeta.content = '#ffffff'; 
+                            
+                            try {
+                                if (document.activeElement && document.activeElement.tagName !== 'BODY') {
+                                    document.activeElement.blur();
+                                }
+                            } catch (e) {}
+                            
+                            pageResult.classList.remove('active');
+                            pageVerify.classList.add('active');
+                            
+                            input.disabled = false;
+                            btnSubmit.disabled = false;
+                            btnSubmit.removeAttribute('aria-disabled');
+                            document.body.style.pointerEvents = 'auto';
+                            input.value = '';
+                            
+                            certImg.onerror = null;
+                            certImg.onload = null;
+                            certImg.src = BLANK_PIXEL;
+                            
+                            isProcessing = false;
+                        }
+                    }, 50);
+                });
+
+                window.addEventListener('pageshow', function(e) {
+                    const isBackForward = e.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2);
+                    if (isBackForward) {
+                        isProcessing = false;
+                        input.disabled = false;
+                        btnSubmit.disabled = false;
+                        btnSubmit.removeAttribute('aria-disabled');
+                        document.body.style.pointerEvents = 'auto';
+                        input.value = '';
+                        window.requestAnimationFrame(() => { document.body.style.opacity = 1; });
+                    }
+                });
+
+                window.addEventListener('pagehide', function() {
+                    if (timer) clearTimeout(timer);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
