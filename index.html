@@ -161,6 +161,8 @@
             top: 0; 
             bottom: 0; left: 0; right: 0;
             background-color: #e0edf8; 
+            overflow: hidden;
+            touch-action: none;
         }
 
         .img-container {
@@ -196,7 +198,10 @@
             user-drag: none;
             -webkit-user-drag: none;
 
-            transform: translateZ(0);
+            transform: translate3d(0, 0, 0) scale(1);
+            transform-origin: 50% 0;
+            touch-action: none;
+            will-change: transform;
             -webkit-backface-visibility: hidden;
             backface-visibility: hidden;
         }
@@ -278,6 +283,223 @@
             const msgBox = document.getElementById('msg-box');
             const verifyForm = document.getElementById('verify-form');
 
+            // 证书页手机双指缩放：仅作用于证书展示层，不改变验证码页及其他页面逻辑
+            const certWrap = document.querySelector('.cert-wrap');
+            const certZoom = {
+                scale: 1,
+                offsetX: 0,
+                offsetY: 0,
+                baseRect: null,
+                pinching: false,
+                dragging: false,
+                pinchStartDistance: 1,
+                pinchStartScale: 1,
+                pinchStartOffsetX: 0,
+                pinchStartOffsetY: 0,
+                pinchStartMidX: 0,
+                pinchStartMidY: 0,
+                dragStartX: 0,
+                dragStartY: 0,
+                dragStartOffsetX: 0,
+                dragStartOffsetY: 0
+            };
+            const MAX_CERT_ZOOM = 4;
+
+            function touchPoint(touch) {
+                return { x: touch.clientX, y: touch.clientY };
+            }
+
+            function touchDistance(touches) {
+                const first = touchPoint(touches[0]);
+                const second = touchPoint(touches[1]);
+                return Math.max(Math.hypot(second.x - first.x, second.y - first.y), 1);
+            }
+
+            function touchMidpoint(touches) {
+                const first = touchPoint(touches[0]);
+                const second = touchPoint(touches[1]);
+                return {
+                    x: (first.x + second.x) / 2,
+                    y: (first.y + second.y) / 2
+                };
+            }
+
+            function rememberCertificateBaseRect() {
+                const rect = certImg.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0) return false;
+                certZoom.baseRect = {
+                    left: rect.left,
+                    top: rect.top,
+                    width: rect.width,
+                    height: rect.height
+                };
+                return true;
+            }
+
+            function resetCertificateZoom() {
+                certZoom.scale = 1;
+                certZoom.offsetX = 0;
+                certZoom.offsetY = 0;
+                certZoom.pinching = false;
+                certZoom.dragging = false;
+                certZoom.baseRect = null;
+                certImg.style.transform = 'translate3d(0, 0, 0) scale(1)';
+                rememberCertificateBaseRect();
+            }
+
+            function certificatePanLimits(scale) {
+                const base = certZoom.baseRect;
+                const view = certWrap.getBoundingClientRect();
+                if (!base || view.width <= 0 || view.height <= 0) {
+                    return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+                }
+
+                const originX = base.left + (base.width / 2);
+                const originY = base.top;
+                const scaledWidth = base.width * scale;
+                const scaledHeight = base.height * scale;
+                const unshiftedLeft = originX - (scaledWidth / 2);
+                const unshiftedTop = originY;
+
+                let minX;
+                let maxX;
+                if (scaledWidth <= view.width) {
+                    minX = view.left - unshiftedLeft;
+                    maxX = view.right - (unshiftedLeft + scaledWidth);
+                } else {
+                    minX = view.right - (unshiftedLeft + scaledWidth);
+                    maxX = view.left - unshiftedLeft;
+                }
+
+                let minY;
+                let maxY;
+                if (scaledHeight <= view.height) {
+                    minY = view.top - unshiftedTop;
+                    maxY = view.bottom - (unshiftedTop + scaledHeight);
+                } else {
+                    minY = view.bottom - (unshiftedTop + scaledHeight);
+                    maxY = view.top - unshiftedTop;
+                }
+
+                return { minX, maxX, minY, maxY };
+            }
+
+            function applyCertificateZoom(scale, offsetX, offsetY) {
+                if (!certZoom.baseRect && !rememberCertificateBaseRect()) return;
+
+                certZoom.scale = Math.max(1, Math.min(MAX_CERT_ZOOM, scale));
+                const limits = certificatePanLimits(certZoom.scale);
+                if (certZoom.scale <= 1) {
+                    certZoom.offsetX = 0;
+                    certZoom.offsetY = 0;
+                } else {
+                    certZoom.offsetX = Math.max(limits.minX, Math.min(limits.maxX, offsetX));
+                    certZoom.offsetY = Math.max(limits.minY, Math.min(limits.maxY, offsetY));
+                }
+
+                certImg.style.transform = 'translate3d(' +
+                    certZoom.offsetX + 'px, ' +
+                    certZoom.offsetY + 'px, 0) scale(' +
+                    certZoom.scale + ')';
+            }
+
+            function beginCertificatePinch(touches) {
+                if (!certZoom.baseRect && !rememberCertificateBaseRect()) return false;
+
+                const midpoint = touchMidpoint(touches);
+                certZoom.pinching = true;
+                certZoom.dragging = false;
+                certZoom.pinchStartDistance = touchDistance(touches);
+                certZoom.pinchStartScale = certZoom.scale;
+                certZoom.pinchStartOffsetX = certZoom.offsetX;
+                certZoom.pinchStartOffsetY = certZoom.offsetY;
+                certZoom.pinchStartMidX = midpoint.x;
+                certZoom.pinchStartMidY = midpoint.y;
+                return true;
+            }
+
+            function beginCertificateDrag(touch) {
+                certZoom.dragging = certZoom.scale > 1;
+                certZoom.dragStartX = touch.clientX;
+                certZoom.dragStartY = touch.clientY;
+                certZoom.dragStartOffsetX = certZoom.offsetX;
+                certZoom.dragStartOffsetY = certZoom.offsetY;
+            }
+
+            function handleCertificateTouchStart(event) {
+                if (event.touches.length >= 2) {
+                    if (beginCertificatePinch(event.touches)) event.preventDefault();
+                } else if (event.touches.length === 1 && certZoom.scale > 1) {
+                    beginCertificateDrag(event.touches[0]);
+                    event.preventDefault();
+                }
+            }
+
+            function handleCertificateTouchMove(event) {
+                if (event.touches.length >= 2) {
+                    if (!certZoom.pinching && !beginCertificatePinch(event.touches)) return;
+
+                    const distance = touchDistance(event.touches);
+                    const midpoint = touchMidpoint(event.touches);
+                    const startScale = certZoom.pinchStartScale;
+                    const nextScale = Math.max(1, Math.min(
+                        MAX_CERT_ZOOM,
+                        startScale * (distance / certZoom.pinchStartDistance)
+                    ));
+                    const originX = certZoom.baseRect.left + (certZoom.baseRect.width / 2);
+                    const originY = certZoom.baseRect.top;
+                    const scaleRatio = nextScale / startScale;
+                    const nextOffsetX = certZoom.pinchStartOffsetX +
+                        (midpoint.x - certZoom.pinchStartMidX) +
+                        (1 - scaleRatio) *
+                        (certZoom.pinchStartMidX - originX - certZoom.pinchStartOffsetX);
+                    const nextOffsetY = certZoom.pinchStartOffsetY +
+                        (midpoint.y - certZoom.pinchStartMidY) +
+                        (1 - scaleRatio) *
+                        (certZoom.pinchStartMidY - originY - certZoom.pinchStartOffsetY);
+
+                    applyCertificateZoom(nextScale, nextOffsetX, nextOffsetY);
+                    event.preventDefault();
+                    return;
+                }
+
+                if (event.touches.length === 1 && certZoom.dragging && certZoom.scale > 1) {
+                    const touch = event.touches[0];
+                    applyCertificateZoom(
+                        certZoom.scale,
+                        certZoom.dragStartOffsetX + (touch.clientX - certZoom.dragStartX),
+                        certZoom.dragStartOffsetY + (touch.clientY - certZoom.dragStartY)
+                    );
+                    event.preventDefault();
+                }
+            }
+
+            function handleCertificateTouchEnd(event) {
+                if (event.touches.length >= 2) return;
+
+                if (event.touches.length === 1 && certZoom.pinching && certZoom.scale > 1) {
+                    certZoom.pinching = false;
+                    beginCertificateDrag(event.touches[0]);
+                    event.preventDefault();
+                    return;
+                }
+
+                certZoom.pinching = false;
+                certZoom.dragging = false;
+                if (certZoom.scale <= 1) applyCertificateZoom(1, 0, 0);
+            }
+
+            function handleCertificateTouchCancel() {
+                certZoom.pinching = false;
+                certZoom.dragging = false;
+                if (certZoom.scale <= 1) applyCertificateZoom(1, 0, 0);
+            }
+
+            certWrap.addEventListener('touchstart', handleCertificateTouchStart, { passive: false });
+            certWrap.addEventListener('touchmove', handleCertificateTouchMove, { passive: false });
+            certWrap.addEventListener('touchend', handleCertificateTouchEnd, { passive: false });
+            certWrap.addEventListener('touchcancel', handleCertificateTouchCancel, { passive: false });
+
             let isProcessing = false;
 
             function safeGetHistoryState() {
@@ -349,6 +571,7 @@
 
                 const clearWatchdog = () => { if (loadWatchdog) clearTimeout(loadWatchdog); };
                 const unlockUI = () => {
+                    resetCertificateZoom();
                     isProcessing = false;
                     input.disabled = false;
                     btnSubmit.disabled = false;
@@ -441,6 +664,9 @@
 
             window.addEventListener('orientationchange', function() {
                 if (document.activeElement === input) input.blur();
+                window.requestAnimationFrame(() => {
+                    if (pageResult.classList.contains('active')) resetCertificateZoom();
+                });
             });
 
             input.onblur = () => {
@@ -453,6 +679,7 @@
                 debounceTimer = setTimeout(() => {
                     const hState = safeGetHistoryState();
                     if (!hState || hState.page === 1) {
+                        resetCertificateZoom();
                         document.title = "国家职业资格证书管理系统";
                         document.body.style.backgroundColor = '#ffffff';
                         themeMeta.content = '#ffffff'; 
@@ -490,7 +717,10 @@
                     btnSubmit.removeAttribute('aria-disabled');
                     document.body.style.pointerEvents = 'auto';
                     input.value = '';
-                    window.requestAnimationFrame(() => { document.body.style.opacity = 1; });
+                    window.requestAnimationFrame(() => {
+                        document.body.style.opacity = 1;
+                        if (pageResult.classList.contains('active')) resetCertificateZoom();
+                    });
                 }
             });
 
